@@ -16,7 +16,7 @@ spec:
       - name: spring-boot-container
         image: 024230653708.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
         ports:
-        - containerPort: 8085
+        - containerPort: 8080   # Updated to match Spring Boot
 ---
 apiVersion: v1
 kind: Service
@@ -26,6 +26,6 @@ spec:
   type: LoadBalancer
   ports:
     - port: 80
-      targetPort: 8085
+      targetPort: 8080          # Route traffic from port 80 to 8080
   selector:
     app: spring-boot-app
