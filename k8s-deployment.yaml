@@ -14,17 +14,9 @@ spec:
     spec:
       containers:
       - name: spring-boot-container
-        # Match your correct account ID (024230653708) and region (us-east-1)
         image: 024230653708.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
         ports:
         - containerPort: 8085
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
@@ -34,6 +26,6 @@ spec:
   type: LoadBalancer
   ports:
     - port: 80
-      targetPort: 8085   # Must match your containerPort!
+      targetPort: 8085
   selector:
     app: spring-boot-app
