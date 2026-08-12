@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: spring-boot-app
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: spring-boot-app
@@ -13,10 +13,18 @@ spec:
         app: spring-boot-app
     spec:
       containers:
-        - name: spring-boot-container
-          image: 544917027663.dkr.ecr.us-east-2.amazonaws.com/my-app:latest
-          ports:
-            - containerPort: 8085
+      - name: spring-boot-container
+        # Match your correct account ID (024230653708) and region (us-east-1)
+        image: 024230653708.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+        ports:
+        - containerPort: 8085
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
@@ -24,8 +32,8 @@ metadata:
   name: spring-boot-service
 spec:
   type: LoadBalancer
-  selector:
-    app: spring-boot-app
   ports:
     - port: 80
-      targetPort: 8085
+      targetPort: 8085   # Must match your containerPort!
+  selector:
+    app: spring-boot-app
