@@ -2,67 +2,49 @@ pipeline {
     agent any
 
     environment {
-        ACCOUNT_ID  = "024230653708"
-        AWS_REGION  = "us-east-1"
-        IMAGE_NAME  = "my-app"
-        EKS_CLUSTER = "my-eks-cluster"
-        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
+        AWS_ACCOUNT_ID = '024230653708'
+        AWS_REGION     = 'us-east-1'
+        IMAGE_REPO     = 'my-app'
+        IMAGE_TAG      = "${BUILD_NUMBER}"
     }
 
     stages {
-        stage('Build Docker Image') {
+        stage('Docker Build') {
             steps {
-                sh '''
-                    docker build -t $IMAGE_NAME:$BUILD_NUMBER .
-                '''
+                sh "docker build -t ${IMAGE_REPO}:${IMAGE_TAG} ."
+                sh "docker tag ${IMAGE_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:${IMAGE_TAG}"
+                sh "docker tag ${IMAGE_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:latest"
             }
         }
 
         stage('AWS ECR Login & Push') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credentials'
-                ]]) {
-                    sh '''
-                        aws ecr get-login-password --region $AWS_REGION | \
-                        docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-
-                        docker tag $IMAGE_NAME:$BUILD_NUMBER $ECR_REPO:$BUILD_NUMBER
-                        docker tag $IMAGE_NAME:$BUILD_NUMBER $ECR_REPO:latest
-
-                        docker push $ECR_REPO:$BUILD_NUMBER
-                        docker push $ECR_REPO:latest
-                    '''
-                }
+                sh """
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:${IMAGE_TAG}
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:latest
+                """
             }
         }
 
         stage('Deploy to AWS EKS') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credentials'
-                ]]) {
-                    sh '''
-                        aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER
-                        
-                        # Dynamically update the deployment image tag
-                        sed -i "s|image: .*|image: $ECR_REPO:$BUILD_NUMBER|g" k8s-deployment.yaml
-                        
-                        # Apply Kubernetes manifests
-                        kubectl apply -f k8s-deployment.yaml
-                    '''
-                }
+                sh """
+                    aws eks update-kubeconfig --region ${AWS_REGION} --name my-eks-cluster
+                    kubectl apply -f k8s-deployment.yaml
+                    kubectl rollout restart deployment/my-app-deployment || true
+                """
             }
         }
     }
 
     post {
         always {
-            sh '''
-                docker rmi $IMAGE_NAME:$BUILD_NUMBER $ECR_REPO:$BUILD_NUMBER $ECR_REPO:latest || true
-            '''
+            sh """
+                docker rmi -f ${IMAGE_REPO}:${IMAGE_TAG} || true
+                docker rmi -f ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:${IMAGE_TAG} || true
+                docker rmi -f ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:latest || true
+            """
         }
     }
 }
